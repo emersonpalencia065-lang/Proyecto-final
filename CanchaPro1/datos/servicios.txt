@@ -1,0 +1,4 @@
+S01,Balon profesional,20.0
+S02,Chalecos petos,15.0
+S03,Arbitro,100.0
+S04,Iluminacion nocturna,30.0
