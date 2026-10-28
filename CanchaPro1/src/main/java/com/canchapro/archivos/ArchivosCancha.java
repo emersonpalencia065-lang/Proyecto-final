@@ -32,6 +32,46 @@ public class ArchivosCancha {
         }
     }
 
+    public void guardarTodas(Cancha[] canchas) {
+        try {
+            File carpeta = new File("datos");
+            if (!carpeta.exists()) {
+                carpeta.mkdirs();
+            }
+            FileWriter archivo = new FileWriter(ruta, false);
+            BufferedWriter bw = new BufferedWriter(archivo);
+
+            for (int i = 0; i < canchas.length; i++) {
+                Cancha c = canchas[i];
+                String linea = c.getCodigo() + "," + c.getNombre() + "," + c.getTipo() + "," + c.getCapacidad() + "," + c.getEstado() + "," + c.getHoraApertura() + "," + c.getHoraCierre() + "," + c.getPrecioBase();
+                bw.write(linea);
+                bw.newLine();
+            }
+
+            bw.close();
+            archivo.close();
+        } catch (IOException e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    public boolean actualizarEstado(String codigo, String nuevoEstado) {
+        Cancha[] canchas = leerCanchas();
+        boolean encontrada = false;
+        for (int i = 0; i < canchas.length; i++) {
+            if (canchas[i].getCodigo().equalsIgnoreCase(codigo)) {
+                canchas[i].setEstado(nuevoEstado);
+                encontrada = true;
+                break;
+            }
+        }
+        if (encontrada) {
+            guardarTodas(canchas);
+            return true;
+        }
+        return false;
+    }
+
     public Cancha[] leerCanchas() {
         Cancha[] canchas = new Cancha[50];
         int total = 0;
