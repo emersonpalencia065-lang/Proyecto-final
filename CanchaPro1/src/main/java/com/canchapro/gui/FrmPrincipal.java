@@ -2,15 +2,21 @@ package com.canchapro.gui;
 
 import com.canchapro.archivos.ArchivosCancha;
 import com.canchapro.archivos.ArchivosCliente;
+import com.canchapro.archivos.ArchivosConfiguracion;
 import com.canchapro.archivos.ArchivosPago;
+import com.canchapro.archivos.ArchivosProducto;
 import com.canchapro.archivos.ArchivosReserva;
 import com.canchapro.archivos.ArchivosServicio;
+import com.canchapro.archivos.ArchivosVenta;
 import com.canchapro.logica.LogicaReservas;
 import com.canchapro.modelo.Cancha;
 import com.canchapro.modelo.Cliente;
+import com.canchapro.modelo.DetalleVenta;
 import com.canchapro.modelo.Pago;
+import com.canchapro.modelo.Producto;
 import com.canchapro.modelo.Reserva;
 import com.canchapro.modelo.ServicioAdicional;
+import com.canchapro.modelo.Venta;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -40,6 +46,9 @@ public class FrmPrincipal extends JFrame {
     private ArchivosServicio archServicio;
     private ArchivosReserva archReserva;
     private ArchivosPago archPago;
+    private ArchivosProducto archProducto;
+    private ArchivosVenta archVenta;
+    private ArchivosConfiguracion archConfig;
     private LogicaReservas logica;
 
     private JTabbedPane pestanias;
@@ -48,6 +57,7 @@ public class FrmPrincipal extends JFrame {
     private DefaultTableModel modeloClientes;
     private DefaultTableModel modeloCanchas;
     private DefaultTableModel modeloPagos;
+    private DefaultTableModel modeloProductos;
 
     private JLabel lblTotalReservasHoy;
     private JLabel lblReservasPendientes;
@@ -73,10 +83,13 @@ public class FrmPrincipal extends JFrame {
         this.archServicio = new ArchivosServicio();
         this.archReserva = new ArchivosReserva();
         this.archPago = new ArchivosPago();
+        this.archProducto = new ArchivosProducto();
+        this.archVenta = new ArchivosVenta();
+        this.archConfig = new ArchivosConfiguracion();
         this.logica = new LogicaReservas();
 
         setTitle("CanchaPro - Sistema de Gestion y Reservas");
-        setSize(950, 680);
+        setSize(980, 700);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
@@ -93,6 +106,12 @@ public class FrmPrincipal extends JFrame {
         pestanias.addTab("Clientes", crearPanelClientes());
         pestanias.addTab("Canchas", crearPanelCanchas());
         pestanias.addTab("Pagos y Abonos", crearPanelPagos());
+
+        if (archConfig.isModuloTiendaActivo()) {
+            pestanias.addTab("Tienda / Cafeteria", crearPanelTienda());
+        }
+
+        pestanias.addTab("Configuracion", crearPanelConfiguracion());
 
         add(pestanias);
     }
@@ -571,6 +590,114 @@ public class FrmPrincipal extends JFrame {
         return panel;
     }
 
+    private JPanel crearPanelTienda() {
+        JPanel panel = new JPanel(new BorderLayout(10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        String[] cols = {"Codigo", "Producto", "Categoria", "Precio", "Stock", "Stock Minimo", "Estado"};
+        modeloProductos = new DefaultTableModel(cols, 0);
+        JTable tabla = new JTable(modeloProductos);
+        panel.add(new JScrollPane(tabla), BorderLayout.CENTER);
+
+        JPanel pnlVenta = new JPanel(new GridLayout(2, 5, 5, 5));
+        JTextField txtCant = new JTextField("1");
+        JTextField txtResOpcional = new JTextField();
+        JComboBox<String> cbMetVenta = new JComboBox<>(new String[]{"Efectivo", "Tarjeta"});
+        JButton btnVender = new JButton("Realizar Venta");
+
+        pnlVenta.add(new JLabel("Cantidad a vender:"));
+        pnlVenta.add(new JLabel("Reserva (Opcional):"));
+        pnlVenta.add(new JLabel("Metodo de Pago:"));
+        pnlVenta.add(new JLabel(""));
+        pnlVenta.add(new JLabel(""));
+
+        pnlVenta.add(txtCant);
+        pnlVenta.add(txtResOpcional);
+        pnlVenta.add(cbMetVenta);
+        pnlVenta.add(btnVender);
+
+        btnVender.addActionListener(e -> {
+            int fila = tabla.getSelectedRow();
+            if (fila >= 0) {
+                String idProd = (String) modeloProductos.getValueAt(fila, 0);
+                Producto[] productos = archProducto.leerProductos();
+                Producto productoSeleccionado = null;
+                for (int i = 0; i < productos.length; i++) {
+                    if (productos[i].getCodigo().equalsIgnoreCase(idProd)) {
+                        productoSeleccionado = productos[i];
+                        break;
+                    }
+                }
+
+                if (productoSeleccionado == null) {
+                    JOptionPane.showMessageDialog(this, "Producto no encontrado.");
+                    return;
+                }
+
+                try {
+                    int cant = Integer.parseInt(txtCant.getText().trim());
+                    if (cant <= 0) {
+                        JOptionPane.showMessageDialog(this, "La cantidad debe ser mayor a 0.");
+                        return;
+                    }
+                    if (cant > productoSeleccionado.getStock()) {
+                        JOptionPane.showMessageDialog(this, "Stock insuficiente. Solo quedan " + productoSeleccionado.getStock() + " unidades.");
+                        return;
+                    }
+
+                    boolean stockOk = archProducto.actualizarStock(idProd, cant);
+                    if (stockOk) {
+                        Venta[] ventasActuales = archVenta.leerVentas();
+                        String codVenta = "VEN0" + (ventasActuales.length + 1);
+                        double subtotal = cant * productoSeleccionado.getPrecio();
+                        String fechaHoy = LocalDate.now().toString();
+                        String met = (String) cbMetVenta.getSelectedItem();
+                        String resId = txtResOpcional.getText().trim();
+
+                        Venta v = new Venta(codVenta, fechaHoy, resId, subtotal, met);
+                        archVenta.guardarVenta(v);
+
+                        DetalleVenta dv = new DetalleVenta(codVenta, idProd, cant, productoSeleccionado.getPrecio(), subtotal);
+                        archVenta.guardarDetalle(dv);
+
+                        JOptionPane.showMessageDialog(this, "Venta " + codVenta + " realizada por Q" + subtotal);
+                        txtCant.setText("1");
+                        txtResOpcional.setText("");
+                        actualizarTablaProductos();
+                    } else {
+                        JOptionPane.showMessageDialog(this, "Error al actualizar stock.");
+                    }
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, "Ingrese un numero entero valido en cantidad.");
+                }
+            } else {
+                JOptionPane.showMessageDialog(this, "Seleccione un producto de la tabla.");
+            }
+        });
+
+        panel.add(pnlVenta, BorderLayout.SOUTH);
+        return panel;
+    }
+
+    private JPanel crearPanelConfiguracion() {
+        JPanel panel = new JPanel(new GridLayout(4, 1, 10, 10));
+        panel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+
+        JCheckBox chkTienda = new JCheckBox("Activar modulo de Tienda / Cafeteria", archConfig.isModuloTiendaActivo());
+        JButton btnGuardarConfig = new JButton("Guardar Configuracion");
+
+        btnGuardarConfig.addActionListener(e -> {
+            archConfig.setModuloTiendaActivo(chkTienda.isSelected());
+            JOptionPane.showMessageDialog(this, "Configuracion guardada en datos/configuracion.txt.\nReinicie la aplicacion para aplicar cambios visuales.");
+        });
+
+        panel.add(new JLabel("Configuracion de modulos opcionales del sistema CanchaPro:"));
+        panel.add(chkTienda);
+        panel.add(btnGuardarConfig);
+
+        return panel;
+    }
+
     private void actualizarComboClientes() {
         cbClientes.removeAllItems();
         Cliente[] clientes = archCliente.leerClientes();
@@ -639,11 +766,25 @@ public class FrmPrincipal extends JFrame {
         }
     }
 
+    private void actualizarTablaProductos() {
+        if (modeloProductos == null) return;
+        modeloProductos.setRowCount(0);
+        Producto[] productos = archProducto.leerProductos();
+        for (int i = 0; i < productos.length; i++) {
+            Producto p = productos[i];
+            modeloProductos.addRow(new Object[]{
+                    p.getCodigo(), p.getNombre(), p.getCategoria(), "Q" + p.getPrecio(),
+                    p.getStock(), p.getStockMinimo(), p.getEstado()
+            });
+        }
+    }
+
     public void actualizarTodasLasTablas() {
         actualizarTablaReservas();
         actualizarTablaClientes();
         actualizarTablaCanchas();
         actualizarTablaPagos();
+        actualizarTablaProductos();
         actualizarDashboard();
     }
 }

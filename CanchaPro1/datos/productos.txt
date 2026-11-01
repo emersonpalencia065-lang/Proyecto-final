@@ -1,0 +1,5 @@
+P01,Gatorade 500ml,Bebidas,12.0,20,5,ACTIVO
+P02,Agua Pura 600ml,Bebidas,5.0,30,5,ACTIVO
+P03,Papas Lays,Snacks,6.0,15,3,ACTIVO
+P04,Galletas Oreo,Snacks,4.0,25,5,ACTIVO
+P05,Powerade 600ml,Bebidas,10.0,15,4,ACTIVO
